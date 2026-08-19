@@ -1,6 +1,6 @@
 # Contabil
 
-Aplicativo que conecta o escritório de contabilidade e a empresa cliente:
+Plataforma web e mobile que conecta o escritório de contabilidade e a empresa cliente:
 entrega de guias e documentos, controle de vencimentos com sincronização de
 agenda, leitura automática de PDF, dashboards de receita e carga tributária,
 pagamento de guia e cobrança de honorário.

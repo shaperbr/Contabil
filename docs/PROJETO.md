@@ -8,8 +8,8 @@
 
 ## 1. Visão
 
-Um aplicativo que serve de ponte entre o **escritório de contabilidade** e a
-**empresa cliente**. O escritório publica guias e documentos; o app extrai os
+Uma plataforma — **web e mobile** — que serve de ponte entre o **escritório de
+contabilidade** e a **empresa cliente**. O escritório publica guias e documentos; o app extrai os
 dados do PDF, cria o vencimento, joga na agenda do cliente, avisa antes de
 vencer, permite pagar ali mesmo, mostra quanto a empresa fatura e quanto paga
 de imposto — e cobra o honorário do próprio escritório pelo app.
@@ -36,23 +36,45 @@ vencimento nem pergunta 'quanto eu pago de imposto?'."_
 
 ---
 
-## 2. Personas e papéis
+## 2. Personas e superfícies
 
-| Papel | Onde usa | O que faz |
+### Papéis
+
+| Papel | O que faz |
+| --- | --- |
+| **Escritório (admin)** | Cadastra empresas, gerencia usuários, define honorários, vê a carteira inteira |
+| **Contador / analista** | Sobe guias e documentos em lote, acompanha pendências, cobra documento |
+| **Cliente (empresário)** | Recebe guia, paga, envia extrato/documento, vê dashboard, paga honorário |
+| **Convidado do cliente** (sócio, financeiro) | Acesso somente leitura ou pagamento, conforme permissão |
+
+### Superfícies — **[DECIDIDO]**
+
+O rascunho dizia _"app apenas p/ celular"_. **Decisão: web também**, para os
+dois lados. O produto tem duas superfícies com paridade de funcionalidade:
+
+| | Mobile (iOS/Android) | Web |
 | --- | --- | --- |
-| **Escritório (admin)** | Web | Cadastra empresas, gerencia usuários, define honorários, vê carteira inteira |
-| **Contador / analista** | Web | Sobe guias e documentos em lote, acompanha pendências, cobra documento |
-| **Cliente (empresário)** | Mobile | Recebe guia, paga, envia extrato/documento, vê dashboard, paga honorário |
-| **Convidado do cliente** (sócio, financeiro) | Mobile | Acesso somente leitura ou pagamento, conforme permissão |
+| **Cliente** | Superfície principal: push de vencimento, foto de documento, pagamento, dashboard | Mesmas funções em tela grande; melhor para revisar dashboard e histórico |
+| **Escritório** | Acompanhamento da carteira, aprovar extração, responder cliente | Superfície principal: upload em lote, revisão de extração, conciliação, cobrança |
 
-> **[DECIDIR] — "App apenas p/ celular" (rascunho, p.1).**
-> Para o **cliente**, mobile-only faz sentido e é o diferencial. Para o
-> **escritório**, subir 200 guias por mês pelo celular é inviável: um analista
-> precisa de upload em lote, tela grande e teclado. A proposta é
-> **mobile para o cliente + painel web para o escritório**. Se a decisão for
-> manter mobile-only para todos, o módulo do escritório vira um importador
-> automático (watch folder / e-mail / integração com o sistema contábil) e o
-> celular fica só para acompanhamento.
+Cada lado tem uma superfície *principal* — é onde o trabalho de verdade
+acontece e onde a UX é otimizada — mas nenhuma função fica trancada em uma só.
+
+**O que isso custa.** A maior parte do trabalho é mesmo compartilhada: API,
+modelo de dados, regras de negócio, permissões, pipeline de extração,
+validações — nada disso se duplica. O que **não** vem de graça:
+
+- **Recursos nativos** sem equivalente no navegador: push confiável, biometria,
+  scanner de documento com câmera, deep link para o app do banco. No web viram
+  fallback (e-mail, upload de arquivo, copiar linha digitável).
+- **Publicação nas lojas**: revisão da Apple/Google, versionamento e o fato de
+  que usuário desatualizado continua existindo — a API precisa versionar.
+- **Layout responsivo de verdade** nas telas densas (tabela de carteira,
+  revisão de extração lado a lado com o PDF).
+
+A estratégia de arquitetura (§5) é montada justamente para que a afirmação
+"o trabalho é basicamente o mesmo" seja verdadeira: monorepo, domínio e
+cliente de API compartilhados, e UI compartilhada onde compensa.
 
 ---
 
@@ -225,31 +247,49 @@ Regras estruturais que evitam retrabalho depois:
 ## 5. Arquitetura proposta
 
 ```
-┌──────────────┐        ┌──────────────┐
-│  App mobile  │        │  Painel web  │
-│ React Native │        │   Next.js    │
-│    (Expo)    │        │ (escritório) │
-└──────┬───────┘        └──────┬───────┘
-       │      HTTPS / REST     │
-       └───────────┬───────────┘
-                   ▼
-          ┌─────────────────┐      ┌──────────────┐
-          │   API (Node/TS) │─────▶│  PostgreSQL  │
-          │  Next API/Nest  │      │  (RLS + pgvector opcional)
-          └────┬───────┬────┘      └──────────────┘
-               │       │
-               ▼       ▼
-      ┌────────────┐  ┌──────────────┐
-      │  Storage   │  │ Fila (Redis) │
-      │ S3 / MinIO │  │   BullMQ     │
-      └────────────┘  └──────┬───────┘
-                             ▼
-                    ┌──────────────────┐
-                    │ Workers          │
-                    │ OCR · extração   │
-                    │ IA · notificação │
-                    │ sync agenda      │
-                    └──────────────────┘
+┌──────────────────┐   ┌──────────────────┐
+│   App mobile     │   │       Web        │
+│  React Native    │   │     Next.js      │
+│     (Expo)       │   │ cliente + escrit.│
+└────────┬─────────┘   └────────┬─────────┘
+         │                      │
+         │   packages/core  ────┤  domínio, tipos, validações,
+         │   packages/api-client│  cliente de API — compartilhados
+         │                      │
+         └──────────┬───────────┘
+                    │  HTTPS / REST (versionada)
+                    ▼
+           ┌─────────────────┐      ┌──────────────┐
+           │   API (Node/TS) │─────▶│  PostgreSQL  │
+           │  Next API/Nest  │      │  (RLS + pgvector opcional)
+           └────┬───────┬────┘      └──────────────┘
+                │       │
+                ▼       ▼
+       ┌────────────┐  ┌──────────────┐
+       │  Storage   │  │ Fila (Redis) │
+       │ S3 / MinIO │  │   BullMQ     │
+       └────────────┘  └──────┬───────┘
+                              ▼
+                     ┌──────────────────┐
+                     │ Workers          │
+                     │ OCR · extração   │
+                     │ IA · notificação │
+                     │ sync agenda      │
+                     └──────────────────┘
+```
+
+### Monorepo
+
+```
+apps/
+  api           API + workers (Node/TS, Prisma)
+  web           Next.js — cliente e escritório
+  mobile        Expo / React Native
+packages/
+  core          domínio: tipos, estados de obrigação, regras de vencimento,
+                validação de linha digitável, cálculo de carga tributária
+  api-client    cliente HTTP tipado, gerado do contrato da API
+  ui            componentes compartilhados (React Native Web) — opcional
 ```
 
 **Escolhas e porquês:**
@@ -258,7 +298,19 @@ Regras estruturais que evitam retrabalho depois:
   infraestrutura existente (Docker Swarm + Traefik + Portainer), o que encurta
   o caminho até produção.
 - **React Native (Expo)** para o app: um código para iOS e Android, push nativo,
-  biometria, deep link para app de banco.
+  biometria, câmera e deep link para app de banco.
+- **`packages/core` é onde mora a regra de negócio.** Se "vencimento em fim de
+  semana antecipa" ou "carga tributária = impostos/receita" for reimplementado
+  em cada superfície, web e mobile vão divergir e mostrar números diferentes
+  para a mesma empresa — o pior tipo de bug num produto financeiro. Regra de
+  negócio duplicada é o único jeito de o custo de duas superfícies sair caro.
+- **Contrato de API único e versionado**, consumido pelas duas superfícies via
+  `api-client` gerado. Nenhuma superfície tem endpoint privativo.
+- **UI compartilhada onde compensa** (React Native Web ou Expo Web): vale para
+  formulário, card de vencimento, lista de documento. Não vale para as telas
+  densas do escritório (tabela de carteira, revisão de extração ao lado do PDF)
+  nem para telas nativas de câmera — essas são nativas de cada superfície,
+  de propósito.
 - **Fila obrigatória**: OCR e chamada de modelo são lentos e falham; nunca no
   request HTTP.
 - **Storage privado** com URL assinada de curta duração. Nenhum documento fiscal
@@ -273,7 +325,7 @@ Regras estruturais que evitam retrabalho depois:
 | Fase | Entrega | Critério de pronto |
 | --- | --- | --- |
 | **0 — Descoberta** | 1 escritório piloto, 5 empresas reais, mapa do fluxo atual e amostra de 50 guias | Amostra de PDFs em mãos e fluxo desenhado |
-| **1 — MVP** | Arquivos + vencimentos manuais + agenda + push + solicitação de documento | Piloto roda um mês inteiro sem planilha paralela |
+| **1 — MVP** | Web (escritório e cliente) + app mobile do cliente: arquivos, vencimentos manuais, agenda, push, solicitação de documento | Piloto roda um mês inteiro sem planilha paralela |
 | **2 — Automação** | Extração de PDF, criação automática de obrigação, dashboards (receita, impostos, %) | ≥90% das guias extraídas sem revisão humana |
 | **3 — Dinheiro** | Linha digitável/Pix + conciliação, honorário recorrente | Primeiro honorário cobrado pelo app |
 | **4 — Dados** | Open Finance (leitura) e assistente de IA sobre dados estruturados | Extrato chega sozinho; assistente responde sem alucinar valor |
@@ -281,6 +333,12 @@ Regras estruturais que evitam retrabalho depois:
 
 A ordem é deliberada: **valor antes de integração**. As fases 1–2 já resolvem
 a dor principal e não dependem de terceiro nenhum.
+
+**Sobre as duas superfícies no roadmap:** a partir da Fase 2, cada entrega sai
+nas duas — a regra vive em `packages/core` e as duas superfícies a consomem.
+Na Fase 1 há uma exceção prática: o app mobile depende de revisão nas lojas,
+então o web sai primeiro e o piloto começa por ele enquanto a primeira build
+mobile é submetida. Não é escopo cortado, é ordem de publicação.
 
 ---
 
@@ -322,24 +380,33 @@ depende de volume), ou plano freemium por empresa (fricção alta em PME).
 
 ---
 
-## 10. Decisões em aberto
+## 10. Decisões
 
-1. **Escopo mobile-only** — painel web para o escritório entra ou não? (§2)
-2. **"Facilitador com I.A."** — extrator, assistente conversacional, ou os dois? (§3.3)
-3. **Pagamento da guia** — deep link para o banco (v1) ou pagamento in-app com PSP?
-4. **Regimes tributários atendidos** — só Simples Nacional na v1, ou também Lucro Presumido/Real? Isso define quais guias o extrator precisa entender.
-5. **Canais de notificação** — push + e-mail bastam, ou WhatsApp é obrigatório? (No Brasil, provavelmente é.)
-6. **Escritório piloto** — quem é? Sem um parceiro real, as fases 0–1 viram suposição.
-7. **Marca e nome do produto.**
+### Fechadas
+
+- **Superfícies** — web **e** mobile, para cliente e escritório, com paridade de
+  funcionalidade e superfície principal distinta para cada lado (§2). Arquitetura
+  em monorepo com domínio compartilhado para sustentar isso (§5).
+
+### Em aberto
+
+1. **"Facilitador com I.A."** — extrator, assistente conversacional, ou os dois? (§3.3)
+2. **Pagamento da guia** — deep link para o banco (v1) ou pagamento in-app com PSP?
+3. **Regimes tributários atendidos** — só Simples Nacional na v1, ou também Lucro Presumido/Real? Isso define quais guias o extrator precisa entender.
+4. **Canais de notificação** — push + e-mail bastam, ou WhatsApp é obrigatório? (No Brasil, provavelmente é.)
+5. **Escritório piloto** — quem é? Sem um parceiro real, as fases 0–1 viram suposição.
+6. **Marca e nome do produto.**
 
 ---
 
 ## 11. Próximos passos sugeridos
 
-1. Fechar as decisões 1, 2 e 4 acima — são as que travam a modelagem.
+1. Fechar as decisões em aberto 1 e 3 (§10) — são as que ainda travam a modelagem.
 2. Conseguir o escritório piloto e uma amostra de 50 guias reais (DAS, DARF,
    FGTS, ISS) para calibrar o extrator.
-3. Prototipar as três telas que definem o produto: **próximo vencimento**,
-   **detalhe da guia** e **dashboard de carga tributária**.
+3. Prototipar as telas que definem o produto, nas duas superfícies:
+   **próximo vencimento**, **detalhe da guia** e **dashboard de carga
+   tributária** (cliente); **upload em lote** e **revisão de extração**
+   (escritório, web).
 4. Provar tecnicamente o pedaço mais arriscado: extrair corretamente os campos
    de um DAS e de um DARF reais, com validação de linha digitável.
