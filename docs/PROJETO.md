@@ -1,8 +1,13 @@
 # Projeto Contábil — Documento de Projeto
 
 > Documento vivo. Origem: rascunho manuscrito de 18/08/2026, transcrito em
-> [`rascunho-original.md`](./rascunho-original.md). Tudo aqui é proposta —
-> os pontos marcados com **[DECIDIR]** ainda dependem do dono do produto.
+> [`rascunho-original.md`](./rascunho-original.md).
+>
+> As decisões de produto estão consolidadas em **[§10](#10-decisões)**, cada uma
+> com uma **posição padrão**: o que vale enquanto ninguém decidir o contrário.
+> Referências no texto no formato **[D3]** apontam para lá. Uma posição padrão
+> não é palpite — é a opção que o resto do documento assume, com o custo de
+> mudar de ideia declarado.
 
 ---
 
@@ -112,7 +117,8 @@ Coração do produto.
   evento no Google Calendar do cliente, atualizado quando muda valor ou data
   e removido quando pago.
 - Notificações escalonadas: D-7, D-3, D-1, no dia, e no atraso. Push como canal
-  principal; e-mail e WhatsApp como fallback. **[DECIDIR]** canais.
+  principal, e-mail espelhando todo aviso crítico, WhatsApp nos pontos de maior
+  consequência — ver **[D4]**.
 
 ### 3.3 Extração de PDF (o "Facilitador com I.A.")
 
@@ -127,6 +133,21 @@ upload → OCR (se necessário) → classificação do documento → extração 
 Campos-alvo por guia: CNPJ, competência, código de receita, vencimento,
 principal, multa, juros, total, linha digitável / QR Pix.
 
+**Escopo de guias por fase** — decorre de **[D3]**:
+
+| Guia | Padronização | Fase |
+| --- | --- | --- |
+| **DAS** (Simples Nacional) | Nacional, layout único | 2 |
+| **DARF** (INSS/folha, IRPJ, CSLL, PIS/COFINS) | Nacional, formato estável | 2 |
+| **FGTS** (FGTS Digital / GRF) | Nacional | 2 |
+| **ISS municipal** | Nenhuma — layout por prefeitura | Sob demanda, município a município |
+| **Balancete / DRE** | Varia por sistema contábil | 2 (alimenta dashboards) |
+| **Extrato bancário** | OFX padronizado; PDF varia por banco | 2 (OFX) / 4 (Open Finance) |
+
+A linha digitável de arrecadação tem dígito verificador — dá para **validar a
+extração offline**, sem depender da confiança do modelo. É a checagem mais
+barata e mais valiosa do pipeline.
+
 **Regra inegociável:** nada com valor financeiro é pago com base apenas em
 extração automática. Abaixo do limiar de confiança, um humano confirma. O
 campo extraído sempre mostra a origem (página e trecho do PDF).
@@ -137,9 +158,8 @@ O mesmo pipeline lê **balancete / DRE** para alimentar os dashboards, e o
 > Sobre o "facilitador com I.A." do rascunho: ele tem **duas leituras
 > possíveis** — (a) o extrator de documentos descrito acima, ou (b) um
 > assistente conversacional ("quanto paguei de ISS esse ano?", "o que é essa
-> guia?"). Este documento assume que (a) é a v1 (é o que gera valor
-> mensurável) e (b) entra na Fase 4, já em cima de dados estruturados —
-> assistente sobre PDF cru alucina valor de imposto. **[DECIDIR]**
+> guia?"). Este documento assume (a) na v1 e (b) na Fase 4, sobre dados já
+> estruturados — ver **[D2]**.
 
 ### 3.4 Dashboards
 
@@ -165,8 +185,8 @@ Dois fluxos distintos, que não devem ser confundidos:
    responsabilidade sobre valor errado — decisão consciente, não detalhe técnico.
 2. **Cobrança de honorário** (rascunho: _"cobrança de honorário direto no app"_) —
    o dinheiro é do escritório. Assinatura recorrente por CNPJ, via Pix
-   recorrente/automático, boleto ou cartão. Split entre plataforma e escritório
-   se o modelo de receita for marketplace. **[DECIDIR]**
+   recorrente/automático, boleto ou cartão. Se haverá split entre plataforma e
+   escritório depende do modelo de receita — ver **[D6]**.
 
 ### 3.6 Integrações com o fisco (o "API com a Receita")
 
@@ -368,40 +388,168 @@ mobile é submetida. Não é escopo cortado, é ordem de publicação.
 
 ---
 
-## 9. Modelo de receita — **[DECIDIR]**
+## 9. Modelo de receita
 
-Hipótese principal: **SaaS B2B2C** — quem paga é o escritório, por CNPJ ativo
-por mês; o cliente final usa de graça. O escritório vende o app como
+Posição padrão (**[D6]**): **SaaS B2B2C** — quem paga é o escritório, por CNPJ
+ativo por mês; o cliente final usa de graça. O escritório vende o app como
 diferencial e o custo se paga com a hora que ele deixa de gastar cobrando
 documento.
 
-Alternativas: taxa sobre honorário cobrado via app (alinha incentivo, mas
-depende de volume), ou plano freemium por empresa (fricção alta em PME).
+Alternativas consideradas: taxa sobre honorário cobrado via app (alinha melhor
+o incentivo, mas só funciona com volume e amarra a receita à Fase 3), ou
+freemium por empresa (fricção alta em PME).
+
+O custo variável que precisa caber no preço: mensagens de WhatsApp (**[D4]**),
+OCR/modelo por documento e, mais tarde, consultas ao agregador de Open Finance.
 
 ---
 
 ## 10. Decisões
 
-### Fechadas
+Cada decisão tem uma **posição padrão**: o que vale enquanto ninguém decidir o
+contrário, e o que o resto deste documento assume. Três estados:
 
-- **Superfícies** — web **e** mobile, para cliente e escritório, com paridade de
-  funcionalidade e superfície principal distinta para cada lado (§2). Arquitetura
-  em monorepo com domínio compartilhado para sustentar isso (§5).
+- **Fechada** — decidida pelo dono do produto.
+- **Padrão** — proposta em vigor; muda com uma frase, mas até lá é o plano.
+- **Aberta** — depende de informação que ainda não existe.
 
-### Em aberto
-
-1. **"Facilitador com I.A."** — extrator, assistente conversacional, ou os dois? (§3.3)
-2. **Pagamento da guia** — deep link para o banco (v1) ou pagamento in-app com PSP?
-3. **Regimes tributários atendidos** — só Simples Nacional na v1, ou também Lucro Presumido/Real? Isso define quais guias o extrator precisa entender.
-4. **Canais de notificação** — push + e-mail bastam, ou WhatsApp é obrigatório? (No Brasil, provavelmente é.)
-5. **Escritório piloto** — quem é? Sem um parceiro real, as fases 0–1 viram suposição.
-6. **Marca e nome do produto.**
+| | Decisão | Estado | Precisa estar fechada antes de |
+| --- | --- | --- | --- |
+| **D1** | Superfícies | Fechada | — |
+| **D2** | O que é o "facilitador com I.A." | Padrão | Fase 2 |
+| **D3** | Regimes tributários atendidos | Padrão | Fase 0 (define a amostra de PDFs) |
+| **D4** | Canais de notificação | Padrão | Fase 1 |
+| **D5** | Pagamento da guia | Padrão | Fase 3 |
+| **D6** | Modelo de receita | Padrão | Fase 3 |
+| **D7** | Escritório piloto | **Aberta** | Fase 0 |
+| **D8** | Marca e nome | **Aberta** | Publicação nas lojas (Fase 1) |
 
 ---
 
+### D1 — Superfícies · **Fechada**
+
+**Web e mobile**, para cliente e escritório, com paridade de funcionalidade e
+superfície principal distinta para cada lado (§2). Substitui o _"app apenas p/
+celular"_ do rascunho.
+
+**Consequência:** monorepo com regra de negócio em `packages/core` (§5). O risco
+não é construir duas telas — é duplicar regra e as superfícies passarem a exibir
+números diferentes para a mesma empresa.
+
+---
+
+### D2 — O que é o "facilitador com I.A." · **Padrão**
+
+**Posição:** v1 é o **extrator de documentos**. O **assistente conversacional**
+entra na Fase 4, respondendo a partir do banco de dados estruturado — nunca
+lendo PDF cru.
+
+**Por quê:** o extrator tem valor mensurável (guia vira vencimento sozinha) e
+erro detectável (o dígito verificador da linha digitável bate ou não bate). O
+assistente tem erro **invisível**: se inventar um valor de imposto, ninguém
+percebe até o cliente repetir o número numa reunião. Num produto contábil, isso
+não é bug cosmético — é perda de confiança irrecuperável.
+
+**Se decidir diferente:** antecipar o assistente para a v1 exige, antes,
+avaliação sistemática de alucinação em pergunta financeira e uma política clara
+de quando ele deve responder "não sei". É trabalho de produto, não só de prompt.
+
+---
+
+### D3 — Regimes tributários atendidos · **Padrão**
+
+**Posição:** v1 cobre **Simples Nacional + folha (INSS e FGTS)**. Lucro
+Presumido entra na Fase 2 pelo DARF. **ISS municipal entra por município**,
+conforme a necessidade do piloto — nunca "em geral".
+
+**Por quê:** DAS, DARF e FGTS têm layout nacional e estável, extraíveis com
+regra + validação de dígito verificador, quase sem depender de modelo. O ISS
+municipal é a cauda longa: são mais de cinco mil prefeituras, cada uma com seu
+layout, e nenhum produto resolve isso genericamente. Simples + folha já cobre a
+maioria das PMEs de um escritório típico.
+
+**Se decidir diferente:** incluir Lucro Real na v1 multiplica os tipos de guia e
+de obrigação acessória, e muda o perfil do escritório piloto (D7) — cliente de
+Lucro Real costuma ter departamento financeiro próprio, o que enfraquece a
+proposta de valor do app.
+
+---
+
+### D4 — Canais de notificação · **Padrão**
+
+**Posição:** **push + e-mail** desde a v1, com o e-mail espelhando todo aviso
+crítico. **WhatsApp na Fase 2**, restrito a **D-3 e vencido**.
+
+**Por quê:** push tem entrega não garantida — o usuário desativa, o token
+expira, o sistema mata o app em background. Para um produto cujo valor central é
+"você não perde vencimento", depender só de push é falha estrutural, não
+detalhe. E, no Brasil, o empresário lê WhatsApp; sem ele o produto perde boa
+parte da eficácia.
+
+**O que restringe:** WhatsApp exige a Business API, com templates aprovados pela
+Meta e cobrança por conversa. Multiplicado por (empresas × guias × lembretes),
+vira linha de custo relevante — daí limitar aos dois pontos de maior
+consequência, em vez dos cinco lembretes. O custo entra na conta de D6.
+
+---
+
+### D5 — Pagamento da guia · **Padrão**
+
+**Posição:** v1 usa **linha digitável / QR Pix + deep link para o app do banco**,
+com o cliente confirmando o pagamento. Conciliação automática só na Fase 4, via
+Open Finance. **Sem custódia de dinheiro em nenhuma fase.**
+
+**Por quê:** a pergunta que decide é _se o valor sair errado, quem responde?_ No
+deep link, o cliente conferiu e pagou, como sempre fez. Com pagamento in-app,
+você entra na cadeia de pagamento de tributo de terceiro — o que exige PSP
+licenciado (e, para iniciação de Pix, autorização do Banco Central) e traz
+responsabilidade sobre valor incorreto. Como DAS e DARF já têm QR Pix, a
+experiência do deep link é quase idêntica à do in-app, com uma fração do risco.
+
+**Nota:** a cobrança de **honorário** (§3.5) é outra coisa — ali o dinheiro é do
+escritório, e assinatura recorrente via PSP é o caminho normal.
+
+---
+
+### D6 — Modelo de receita · **Padrão**
+
+**Posição:** **SaaS B2B2C** — o escritório paga por CNPJ ativo/mês; o cliente
+final usa de graça (§9).
+
+**Por quê:** quem sente a dor econômica é o escritório (hora perdida cobrando
+documento, cliente irritado com multa). O cliente final sente a dor, mas não
+compraria software por causa dela.
+
+**Se decidir diferente:** taxa sobre honorário alinha melhor o incentivo, mas
+amarra sua receita à Fase 3 — você não fatura nada até o módulo de pagamento
+existir e ser adotado.
+
+---
+
+### D7 — Escritório piloto · **Aberta**
+
+**O que falta:** um parceiro real. Sem ele, as Fases 0 e 1 são suposição — não
+se sabe quais guias aparecem, em que volume, nem como o analista trabalha hoje.
+E sem amostra de PDFs reais não há como calibrar nem medir o extrator.
+
+**Perfil buscado:** 30–100 CNPJs, majoritariamente Simples Nacional, dono
+acessível, insatisfeito com o processo atual de entrega. Pequeno demais não gera
+volume para testar; grande demais não aceita ser cobaia.
+
+**Bloqueia:** toda a Fase 0, a calibragem do extrator e a validação de D3.
+
+---
+
+### D8 — Marca e nome · **Aberta**
+
+Menos urgente tecnicamente, mas trava domínio, nome nas lojas e registro no
+INPI. Renomear depois de publicado nas lojas é caro e confunde usuário — vale
+fechar antes da primeira submissão.
+
 ## 11. Próximos passos sugeridos
 
-1. Fechar as decisões em aberto 1 e 3 (§10) — são as que ainda travam a modelagem.
+1. **Achar o escritório piloto (D7)** — é o único item que não tem posição
+   padrão possível e trava a Fase 0 inteira.
 2. Conseguir o escritório piloto e uma amostra de 50 guias reais (DAS, DARF,
    FGTS, ISS) para calibrar o extrator.
 3. Prototipar as telas que definem o produto, nas duas superfícies:
@@ -410,3 +558,5 @@ depende de volume), ou plano freemium por empresa (fricção alta em PME).
    (escritório, web).
 4. Provar tecnicamente o pedaço mais arriscado: extrair corretamente os campos
    de um DAS e de um DARF reais, com validação de linha digitável.
+5. Revisar as posições padrão de §10 com o piloto em mãos — D3 e D4, em
+   especial, se confirmam ou caem diante da carteira real dele.
